@@ -60,6 +60,14 @@ pub struct MissingSegment {
     length: usize,
 }
 
+impl MissingSegment {
+    pub fn offsets_for(self, frame_size: usize) -> impl Iterator<Item = usize> {
+        let offset = self.offset;
+        let number_of_frames = self.length / frame_size;
+        (0..number_of_frames).map(move |index| (index * frame_size) + offset)
+    }
+}
+
 pub struct OutOfOrderBytes {
     tail_offset: usize,
     segments: Vec<Segment>,
@@ -188,6 +196,30 @@ impl OutOfOrderBytes {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn offsets_for_frame_size_five() {
+        let missing_segment = MissingSegment {
+            offset: 0,
+            length: 10,
+        };
+        assert_eq!(
+            &[0, 5][..],
+            missing_segment.offsets_for(5).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn offsets_for_frame_size_two() {
+        let missing_segment = MissingSegment {
+            offset: 0,
+            length: 10,
+        };
+        assert_eq!(
+            &[0, 2, 4, 6, 8][..],
+            missing_segment.offsets_for(2).collect::<Vec<_>>()
+        );
+    }
 
     #[test]
     fn fill_in_order() {
