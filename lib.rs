@@ -39,6 +39,12 @@ impl Segment {
     }
 }
 
+#[derive(Copy, Clone, Debug, PartialEq)]
+struct MissingSegment {
+    offset: usize,
+    length: usize,
+}
+
 struct OutOfOrderBytes {
     tail_offset: usize,
     segments: Vec<Segment>,
@@ -138,11 +144,14 @@ impl OutOfOrderBytes {
         Ok(())
     }
 
-    fn missing_segments(&self) -> impl '_ + Iterator<Item = (usize, usize)> {
+    fn missing_segments(&self) -> impl '_ + Iterator<Item = MissingSegment> {
         self.segments
             .iter()
             .filter_map(|segment| match segment.status {
-                Status::Missing => Some((segment.offset, segment.buffer.capacity())),
+                Status::Missing => Some(MissingSegment {
+                    offset: segment.offset,
+                    length: segment.buffer.capacity(),
+                }),
                 Status::Received => None,
             })
     }
@@ -183,7 +192,13 @@ mod tests {
         buffer
             .insert_at_offset(5, &vec![5, 4, 3, 2, 1])
             .expect("write fail");
-        assert_eq!(Some((0, 5)), buffer.missing_segments().next());
+        assert_eq!(
+            Some(MissingSegment {
+                offset: 0,
+                length: 5
+            }),
+            buffer.missing_segments().next()
+        );
     }
 
     #[test]
@@ -196,7 +211,16 @@ mod tests {
             .insert_at_offset(15, &vec![1, 2, 3, 4, 5])
             .expect("write fail");
         assert_eq!(
-            vec![(0, 5), (10, 5)],
+            vec![
+                MissingSegment {
+                    offset: 0,
+                    length: 5
+                },
+                MissingSegment {
+                    offset: 10,
+                    length: 5
+                }
+            ],
             buffer.missing_segments().collect::<Vec<_>>()
         );
     }
@@ -214,7 +238,20 @@ mod tests {
             .insert_at_offset(35, &vec![1, 2, 3, 4, 5])
             .expect("write fail");
         assert_eq!(
-            vec![(0, 5), (10, 5), (20, 15)],
+            vec![
+                MissingSegment {
+                    offset: 0,
+                    length: 5
+                },
+                MissingSegment {
+                    offset: 10,
+                    length: 5
+                },
+                MissingSegment {
+                    offset: 20,
+                    length: 15
+                }
+            ],
             buffer.missing_segments().collect::<Vec<_>>()
         );
     }
