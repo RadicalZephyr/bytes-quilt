@@ -101,7 +101,12 @@ impl OutOfOrderBytes {
         Ok(())
     }
 
-    fn insert_at_offset(&mut self, offset: usize, bytes: &[u8]) -> Result<(), Error> {
+    fn insert_at_offset(
+        &mut self,
+        offset: usize,
+        bytes: &[u8],
+    ) -> Result<Option<MissingSegment>, Error> {
+        let mut missing_segment = None;
         debug_assert!(self
             .segments
             .first()
@@ -127,7 +132,7 @@ impl OutOfOrderBytes {
                     self.write_offset_at_index(index, offset, bytes)?;
                 }
             };
-            return Ok(());
+            return Ok(None);
         } else if self.tail_offset != offset {
             if !self.buffer_tail.is_empty() {
                 let head_received_bytes = self.buffer_tail.split();
@@ -145,13 +150,14 @@ impl OutOfOrderBytes {
             // This is true because of the conditional split above to
             // identify and store a received segment
             debug_assert!(head_bytes.is_empty());
-            self.segments
-                .push(Segment::missing(head_offset, head_bytes));
+            let segment = Segment::missing(head_offset, head_bytes);
+            missing_segment = segment.missing_segment();
+            self.segments.push(segment);
         } else if !self.buffer_tail.is_empty() {
             return Err(Error::WouldOverwrite);
         }
         self.buffer_tail.put(bytes);
-        Ok(())
+        Ok(missing_segment)
     }
 
     fn missing_segments(&self) -> impl '_ + Iterator<Item = MissingSegment> {
@@ -191,7 +197,7 @@ mod tests {
     #[test]
     fn detect_missing_segments() {
         let mut buffer = OutOfOrderBytes::with_capacity(20);
-        buffer
+        let missing_segment = buffer
             .insert_at_offset(5, &vec![5, 4, 3, 2, 1])
             .expect("write fail");
         assert_eq!(
@@ -199,7 +205,7 @@ mod tests {
                 offset: 0,
                 length: 5
             }),
-            buffer.missing_segments().next()
+            missing_segment
         );
     }
 
