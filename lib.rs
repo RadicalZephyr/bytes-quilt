@@ -257,6 +257,37 @@ mod tests {
     }
 
     #[test]
+    fn split_missing_segments_on_incomplete_writes() {
+        let mut buffer = OutOfOrderBytes::with_capacity(40);
+        buffer
+            .insert_at_offset(15, &vec![1, 2, 3, 4, 5])
+            .expect("write fail");
+        assert_eq!(
+            vec![MissingSegment {
+                offset: 0,
+                length: 15
+            }],
+            buffer.missing_segments().collect::<Vec<_>>()
+        );
+        buffer
+            .insert_at_offset(5, &vec![5, 4, 3, 2, 1])
+            .expect("write fail");
+        assert_eq!(
+            vec![
+                MissingSegment {
+                    offset: 0,
+                    length: 5
+                },
+                MissingSegment {
+                    offset: 10,
+                    length: 5
+                },
+            ],
+            buffer.missing_segments().collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
     fn fill_out_of_order_start_aligned_segment() {
         let mut buffer = OutOfOrderBytes::with_capacity(20);
         buffer
