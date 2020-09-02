@@ -3,7 +3,10 @@ use std::mem;
 use bytes::{BufMut, Bytes, BytesMut};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
-struct NotEnoughSpace;
+enum Error {
+    NotEnoughSpace,
+    WouldOverwrite,
+}
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 enum Status {
@@ -56,11 +59,14 @@ impl OutOfOrderBytes {
         index: usize,
         offset: usize,
         bytes: &[u8],
-    ) -> Result<(), NotEnoughSpace> {
+    ) -> Result<(), Error> {
         use std::cmp::Ordering;
         let segment = &mut self.segments[index];
+        if segment.status == Status::Received {
+            return Err(Error::WouldOverwrite);
+        }
         match segment.buffer.capacity().cmp(&bytes.len()) {
-            Ordering::Less => return Err(NotEnoughSpace),
+            Ordering::Less => return Err(Error::NotEnoughSpace),
             Ordering::Equal => {
                 segment.status = Status::Received;
                 segment.buffer.put(bytes);
@@ -79,7 +85,7 @@ impl OutOfOrderBytes {
         Ok(())
     }
 
-    fn insert_at_offset(&mut self, offset: usize, bytes: &[u8]) -> Result<(), NotEnoughSpace> {
+    fn insert_at_offset(&mut self, offset: usize, bytes: &[u8]) -> Result<(), Error> {
         debug_assert!(self
             .segments
             .first()
@@ -125,6 +131,8 @@ impl OutOfOrderBytes {
             debug_assert!(head_bytes.is_empty());
             self.segments
                 .push(Segment::missing(head_offset, head_bytes));
+        } else if !self.buffer_tail.is_empty() {
+            return Err(Error::WouldOverwrite);
         }
         self.buffer_tail.put(bytes);
         Ok(())
@@ -260,8 +268,29 @@ mod tests {
         let mut buffer = OutOfOrderBytes::with_capacity(20);
         buffer.insert_at_offset(4, &vec![2, 1]).expect("write fail");
         assert_eq!(
-            Err(NotEnoughSpace),
+            Err(Error::NotEnoughSpace),
             buffer.insert_at_offset(2, &vec![4, 3, 7, 8])
+        );
+    }
+
+    #[test]
+    fn fails_to_overwrite_a_received_segment() {
+        let mut buffer = OutOfOrderBytes::with_capacity(20);
+        buffer.insert_at_offset(4, &vec![2, 1]).expect("write fail");
+        buffer.insert_at_offset(2, &vec![4, 3]).expect("write fail");
+        assert_eq!(
+            Err(Error::WouldOverwrite),
+            buffer.insert_at_offset(2, &vec![7, 8])
+        );
+    }
+
+    #[test]
+    fn fails_to_overwrite_a_received_segment_in_the_tail() {
+        let mut buffer = OutOfOrderBytes::with_capacity(20);
+        buffer.insert_at_offset(4, &vec![2, 1]).expect("write fail");
+        assert_eq!(
+            Err(Error::WouldOverwrite),
+            buffer.insert_at_offset(4, &vec![7, 8])
         );
     }
 }
