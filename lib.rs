@@ -37,6 +37,16 @@ impl Segment {
             buffer,
         }
     }
+
+    fn missing_segment(&self) -> Option<MissingSegment> {
+        match self.status {
+            Status::Missing => Some(MissingSegment {
+                offset: self.offset,
+                length: self.buffer.capacity(),
+            }),
+            Status::Received => None,
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -145,15 +155,7 @@ impl OutOfOrderBytes {
     }
 
     fn missing_segments(&self) -> impl '_ + Iterator<Item = MissingSegment> {
-        self.segments
-            .iter()
-            .filter_map(|segment| match segment.status {
-                Status::Missing => Some(MissingSegment {
-                    offset: segment.offset,
-                    length: segment.buffer.capacity(),
-                }),
-                Status::Received => None,
-            })
+        self.segments.iter().filter_map(Segment::missing_segment)
     }
 
     fn into_bytes(self) -> Bytes {
