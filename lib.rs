@@ -2,9 +2,14 @@ use std::mem;
 
 use bytes::{BufMut, Bytes, BytesMut};
 
-#[derive(Copy, Clone, Debug, PartialEq)]
-enum Error {
+use thiserror::Error;
+
+#[derive(Copy, Clone, Debug, Error, PartialEq)]
+pub enum Error {
+    #[error("Not enough space in buffer segment")]
     NotEnoughSpace,
+
+    #[error("Would overwrite previously received data")]
     WouldOverwrite,
 }
 
@@ -50,19 +55,19 @@ impl Segment {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
-struct MissingSegment {
+pub struct MissingSegment {
     offset: usize,
     length: usize,
 }
 
-struct OutOfOrderBytes {
+pub struct OutOfOrderBytes {
     tail_offset: usize,
     segments: Vec<Segment>,
     buffer_tail: BytesMut,
 }
 
 impl OutOfOrderBytes {
-    fn with_capacity(capacity: usize) -> Self {
+    pub fn with_capacity(capacity: usize) -> Self {
         Self {
             tail_offset: 0,
             segments: Vec::new(),
@@ -101,7 +106,7 @@ impl OutOfOrderBytes {
         Ok(())
     }
 
-    fn insert_at_offset(
+    pub fn insert_at_offset(
         &mut self,
         offset: usize,
         bytes: &[u8],
@@ -164,7 +169,7 @@ impl OutOfOrderBytes {
         self.segments.iter().filter_map(Segment::missing_segment)
     }
 
-    fn into_bytes(self) -> Bytes {
+    pub fn into_bytes(self) -> Bytes {
         let mut segments = self.segments.into_iter();
         if let Some(first_segment) = segments.next() {
             debug_assert!(first_segment.status == Status::Received);
