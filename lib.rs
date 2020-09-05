@@ -68,6 +68,51 @@ impl MissingSegment {
     }
 }
 
+#[cfg(test)]
+mod missing_segment_tests {
+    use super::*;
+
+    #[test]
+    fn one_offset_missing() {
+        let segment = MissingSegment {
+            offset: 0,
+            length: 10,
+        };
+        assert_eq!(&[0][..], segment.offsets_for(10).collect::<Vec<_>>());
+        let segment = MissingSegment {
+            offset: 10,
+            length: 10,
+        };
+        assert_eq!(&[10][..], segment.offsets_for(10).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn two_offsets_missing() {
+        let segment = MissingSegment {
+            offset: 0,
+            length: 10,
+        };
+        assert_eq!(&[0, 5][..], segment.offsets_for(5).collect::<Vec<_>>());
+        let segment = MissingSegment {
+            offset: 10,
+            length: 10,
+        };
+        assert_eq!(&[10, 15][..], segment.offsets_for(5).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn many_offsets_missing() {
+        let segment = MissingSegment {
+            offset: 5,
+            length: 10,
+        };
+        assert_eq!(
+            &[5, 6, 7, 8, 9, 10, 11, 12, 13, 14][..],
+            segment.offsets_for(1).collect::<Vec<_>>()
+        );
+    }
+}
+
 pub struct OutOfOrderBytes {
     tail_offset: usize,
     segments: Vec<Segment>,
