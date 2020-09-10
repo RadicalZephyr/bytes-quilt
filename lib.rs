@@ -219,7 +219,8 @@ impl OutOfOrderBytes {
             let segment = Segment::missing(head_offset, head_bytes);
             missing_segment = segment.missing_segment();
             self.segments.push(segment);
-        } else if !self.buffer_tail.is_empty() {
+        } else if self.tail_offset == offset && !self.buffer_tail.is_empty() {
+            // Supposed to write at beginning of tail, but tail is not empty!
             return Err(Error::WouldOverwrite);
         }
         self.buffer_tail.put(bytes);
