@@ -43,6 +43,10 @@ impl Segment {
         }
     }
 
+    fn is_missing(&self) -> bool {
+        self.status == Status::Missing
+    }
+
     fn missing_segment(&self) -> Option<MissingSegment> {
         match self.status {
             Status::Missing => Some(MissingSegment {
@@ -224,11 +228,21 @@ impl OutOfOrderBytes {
 
     pub fn into_bytes(self) -> Bytes {
         let mut segments = self.segments.into_iter();
-        if let Some(first_segment) = segments.next() {
-            debug_assert!(first_segment.status == Status::Received);
-            let mut buffer: BytesMut = first_segment.buffer;
+        if let Some(segment) = segments.next() {
+            debug_assert!(
+                !segment.is_missing(),
+                "a segment at offset {} of size {} is missing",
+                segment.offset,
+                segment.buffer.len(),
+            );
+            let mut buffer: BytesMut = segment.buffer;
             for segment in segments {
-                debug_assert!(first_segment.status == Status::Received);
+                debug_assert!(
+                    !segment.is_missing(),
+                    "a segment at offset {} of size {} is missing",
+                    segment.offset,
+                    segment.buffer.len(),
+                );
                 buffer.unsplit(segment.buffer);
             }
             buffer.unsplit(self.buffer_tail);
