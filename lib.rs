@@ -199,11 +199,11 @@ impl OutOfOrderBytes {
                 }
             };
             return Ok(None);
-        } else if self.tail_offset != offset {
+        } else if self.tail_offset + self.buffer_tail.len() < offset {
             if !self.buffer_tail.is_empty() {
+                let head_offset = self.tail_offset;
                 let head_received_bytes = self.buffer_tail.split();
                 self.tail_offset += head_received_bytes.len();
-                let head_offset = self.tail_offset;
                 self.segments
                     .push(Segment::received(head_offset, head_received_bytes));
             }
@@ -294,6 +294,19 @@ mod tests {
             .expect("write fail");
         let bytes = buffer.into_bytes();
         assert_eq!(&[5_u8, 4, 3, 2, 1][..], bytes.as_ref())
+    }
+
+    #[test]
+    fn fill_in_order_produces_no_missing_segments() {
+        let mut buffer = OutOfOrderBytes::with_capacity(20);
+        for offset in 0..20 {
+            buffer
+                .insert_at_offset(offset, &vec![3])
+                .expect("write fail");
+        }
+        assert!(buffer.missing_segments().collect::<Vec<_>>().is_empty());
+        let bytes = buffer.into_bytes();
+        assert_eq!(vec![3; 20], bytes.as_ref())
     }
 
     #[test]
