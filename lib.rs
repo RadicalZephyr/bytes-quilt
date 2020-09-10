@@ -203,8 +203,9 @@ impl OutOfOrderBytes {
             if !self.buffer_tail.is_empty() {
                 let head_received_bytes = self.buffer_tail.split();
                 self.tail_offset += head_received_bytes.len();
+                let head_offset = self.tail_offset;
                 self.segments
-                    .push(Segment::received(self.tail_offset, head_received_bytes));
+                    .push(Segment::received(head_offset, head_received_bytes));
             }
 
             let head_offset = self.tail_offset;
