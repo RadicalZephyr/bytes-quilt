@@ -117,6 +117,7 @@ mod missing_segment_tests {
     }
 }
 
+#[derive(Debug)]
 pub struct OutOfOrderBytes {
     tail_offset: usize,
     segments: Vec<Segment>,
@@ -169,11 +170,14 @@ impl OutOfOrderBytes {
         bytes: &[u8],
     ) -> Result<Option<MissingSegment>, Error> {
         let mut missing_segment = None;
-        debug_assert!(self
-            .segments
-            .first()
-            .map(|segment| segment.offset == 0)
-            .unwrap_or(true));
+        debug_assert!(
+            self.segments
+                .first()
+                .map(|segment| segment.offset == 0)
+                .unwrap_or(true),
+            "first segment offset should be zero, found {:?}",
+            self.segments.first()
+        );
         if self.tail_offset > offset {
             // We should have a missing segment that this offset can write into
             match self
