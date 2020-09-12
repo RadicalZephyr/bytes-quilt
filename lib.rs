@@ -65,6 +65,7 @@ pub struct MissingSegment {
 }
 
 impl MissingSegment {
+    #[allow(dead_code)]
     pub fn offsets_for(self, frame_size: usize) -> impl Iterator<Item = usize> {
         let offset = self.offset;
         let number_of_frames = self.length / frame_size;
@@ -228,6 +229,7 @@ impl OutOfOrderBytes {
         Ok(missing_segment)
     }
 
+    #[allow(dead_code)]
     fn missing_segments(&self) -> impl '_ + Iterator<Item = MissingSegment> {
         self.segments.iter().filter_map(Segment::missing_segment)
     }
