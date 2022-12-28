@@ -13,6 +13,13 @@ pub enum Error {
     WouldOverwrite,
 }
 
+#[derive(Debug)]
+pub struct OutOfOrderBytes {
+    tail_offset: usize,
+    segments: Vec<Segment>,
+    buffer_tail: BytesMut,
+}
+
 #[derive(Copy, Clone, Debug, PartialEq)]
 enum Status {
     Missing,
@@ -26,102 +33,10 @@ struct Segment {
     buffer: BytesMut,
 }
 
-impl Segment {
-    fn missing(offset: usize, buffer: BytesMut) -> Self {
-        Self {
-            status: Status::Missing,
-            offset,
-            buffer,
-        }
-    }
-
-    fn received(offset: usize, buffer: BytesMut) -> Self {
-        Self {
-            status: Status::Received,
-            offset,
-            buffer,
-        }
-    }
-
-    fn is_missing(&self) -> bool {
-        self.status == Status::Missing
-    }
-
-    fn missing_segment(&self) -> Option<MissingSegment> {
-        match self.status {
-            Status::Missing => Some(MissingSegment {
-                offset: self.offset,
-                length: self.buffer.capacity(),
-            }),
-            Status::Received => None,
-        }
-    }
-}
-
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct MissingSegment {
     offset: usize,
     length: usize,
-}
-
-impl MissingSegment {
-    pub fn offsets_for(self, frame_size: usize) -> impl Iterator<Item = usize> {
-        let offset = self.offset;
-        let number_of_frames = self.length / frame_size;
-        (0..number_of_frames).map(move |index| (index * frame_size) + offset)
-    }
-}
-
-#[cfg(test)]
-mod missing_segment_tests {
-    use super::*;
-
-    #[test]
-    fn one_offset_missing() {
-        let segment = MissingSegment {
-            offset: 0,
-            length: 10,
-        };
-        assert_eq!(&[0][..], segment.offsets_for(10).collect::<Vec<_>>());
-        let segment = MissingSegment {
-            offset: 10,
-            length: 10,
-        };
-        assert_eq!(&[10][..], segment.offsets_for(10).collect::<Vec<_>>());
-    }
-
-    #[test]
-    fn two_offsets_missing() {
-        let segment = MissingSegment {
-            offset: 0,
-            length: 10,
-        };
-        assert_eq!(&[0, 5][..], segment.offsets_for(5).collect::<Vec<_>>());
-        let segment = MissingSegment {
-            offset: 10,
-            length: 10,
-        };
-        assert_eq!(&[10, 15][..], segment.offsets_for(5).collect::<Vec<_>>());
-    }
-
-    #[test]
-    fn many_offsets_missing() {
-        let segment = MissingSegment {
-            offset: 5,
-            length: 10,
-        };
-        assert_eq!(
-            &[5, 6, 7, 8, 9, 10, 11, 12, 13, 14][..],
-            segment.offsets_for(1).collect::<Vec<_>>()
-        );
-    }
-}
-
-#[derive(Debug)]
-pub struct OutOfOrderBytes {
-    tail_offset: usize,
-    segments: Vec<Segment>,
-    buffer_tail: BytesMut,
 }
 
 impl OutOfOrderBytes {
@@ -258,9 +173,93 @@ impl OutOfOrderBytes {
     }
 }
 
+impl Segment {
+    fn missing(offset: usize, buffer: BytesMut) -> Self {
+        Self {
+            status: Status::Missing,
+            offset,
+            buffer,
+        }
+    }
+
+    fn received(offset: usize, buffer: BytesMut) -> Self {
+        Self {
+            status: Status::Received,
+            offset,
+            buffer,
+        }
+    }
+
+    fn is_missing(&self) -> bool {
+        self.status == Status::Missing
+    }
+
+    fn missing_segment(&self) -> Option<MissingSegment> {
+        match self.status {
+            Status::Missing => Some(MissingSegment {
+                offset: self.offset,
+                length: self.buffer.capacity(),
+            }),
+            Status::Received => None,
+        }
+    }
+}
+
+impl MissingSegment {
+    pub fn offsets_for(self, frame_size: usize) -> impl Iterator<Item = usize> {
+        let offset = self.offset;
+        let number_of_frames = self.length / frame_size;
+        (0..number_of_frames).map(move |index| (index * frame_size) + offset)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    mod missing_segment {
+        use super::*;
+
+        #[test]
+        fn one_offset_missing() {
+            let segment = MissingSegment {
+                offset: 0,
+                length: 10,
+            };
+            assert_eq!(&[0][..], segment.offsets_for(10).collect::<Vec<_>>());
+            let segment = MissingSegment {
+                offset: 10,
+                length: 10,
+            };
+            assert_eq!(&[10][..], segment.offsets_for(10).collect::<Vec<_>>());
+        }
+
+        #[test]
+        fn two_offsets_missing() {
+            let segment = MissingSegment {
+                offset: 0,
+                length: 10,
+            };
+            assert_eq!(&[0, 5][..], segment.offsets_for(5).collect::<Vec<_>>());
+            let segment = MissingSegment {
+                offset: 10,
+                length: 10,
+            };
+            assert_eq!(&[10, 15][..], segment.offsets_for(5).collect::<Vec<_>>());
+        }
+
+        #[test]
+        fn many_offsets_missing() {
+            let segment = MissingSegment {
+                offset: 5,
+                length: 10,
+            };
+            assert_eq!(
+                &[5, 6, 7, 8, 9, 10, 11, 12, 13, 14][..],
+                segment.offsets_for(1).collect::<Vec<_>>()
+            );
+        }
+    }
 
     #[test]
     fn offsets_for_frame_size_five() {
