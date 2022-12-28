@@ -4,7 +4,7 @@ use bytes::{BufMut, Bytes, BytesMut};
 
 use thiserror::Error;
 
-#[derive(Copy, Clone, Debug, Error, PartialEq)]
+#[derive(Copy, Clone, Debug, Error, PartialEq, Eq)]
 pub enum Error {
     #[error("Not enough space in buffer segment")]
     NotEnoughSpace,
@@ -58,14 +58,13 @@ impl Segment {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct MissingSegment {
     offset: usize,
     length: usize,
 }
 
 impl MissingSegment {
-    #[allow(dead_code)]
     pub fn offsets_for(self, frame_size: usize) -> impl Iterator<Item = usize> {
         let offset = self.offset;
         let number_of_frames = self.length / frame_size;
@@ -229,8 +228,7 @@ impl OutOfOrderBytes {
         Ok(missing_segment)
     }
 
-    #[allow(dead_code)]
-    fn missing_segments(&self) -> impl '_ + Iterator<Item = MissingSegment> {
+    pub fn missing_segments(&self) -> impl '_ + Iterator<Item = MissingSegment> {
         self.segments.iter().filter_map(Segment::missing_segment)
     }
 
@@ -292,7 +290,7 @@ mod tests {
     fn fill_in_order() {
         let mut buffer = OutOfOrderBytes::with_capacity(20);
         buffer
-            .insert_at_offset(0, &vec![5_u8, 4, 3, 2, 1])
+            .insert_at_offset(0, &[5_u8, 4, 3, 2, 1])
             .expect("write fail");
         let bytes = buffer.into_bytes();
         assert_eq!(&[5_u8, 4, 3, 2, 1][..], bytes.as_ref())
@@ -302,11 +300,9 @@ mod tests {
     fn fill_in_order_produces_no_missing_segments() {
         let mut buffer = OutOfOrderBytes::with_capacity(20);
         for offset in 0..20 {
-            buffer
-                .insert_at_offset(offset, &vec![3])
-                .expect("write fail");
+            buffer.insert_at_offset(offset, &[3]).expect("write fail");
         }
-        assert!(buffer.missing_segments().collect::<Vec<_>>().is_empty());
+        assert!(buffer.missing_segments().next().is_none());
         let bytes = buffer.into_bytes();
         assert_eq!(vec![3; 20], bytes.as_ref())
     }
@@ -315,7 +311,7 @@ mod tests {
     fn detect_missing_segments() {
         let mut buffer = OutOfOrderBytes::with_capacity(20);
         let missing_segment = buffer
-            .insert_at_offset(5, &vec![5, 4, 3, 2, 1])
+            .insert_at_offset(5, &[5, 4, 3, 2, 1])
             .expect("write fail");
         assert_eq!(
             Some(MissingSegment {
@@ -330,10 +326,10 @@ mod tests {
     fn detect_multiple_missing_segments() {
         let mut buffer = OutOfOrderBytes::with_capacity(20);
         buffer
-            .insert_at_offset(5, &vec![5, 4, 3, 2, 1])
+            .insert_at_offset(5, &[5, 4, 3, 2, 1])
             .expect("write fail");
         buffer
-            .insert_at_offset(15, &vec![1, 2, 3, 4, 5])
+            .insert_at_offset(15, &[1, 2, 3, 4, 5])
             .expect("write fail");
         assert_eq!(
             vec![
@@ -354,13 +350,13 @@ mod tests {
     fn detect_missing_segments_of_different_sizes() {
         let mut buffer = OutOfOrderBytes::with_capacity(40);
         buffer
-            .insert_at_offset(5, &vec![5, 4, 3, 2, 1])
+            .insert_at_offset(5, &[5, 4, 3, 2, 1])
             .expect("write fail");
         buffer
-            .insert_at_offset(15, &vec![1, 2, 3, 4, 5])
+            .insert_at_offset(15, &[1, 2, 3, 4, 5])
             .expect("write fail");
         buffer
-            .insert_at_offset(35, &vec![1, 2, 3, 4, 5])
+            .insert_at_offset(35, &[1, 2, 3, 4, 5])
             .expect("write fail");
         assert_eq!(
             vec![
@@ -385,7 +381,7 @@ mod tests {
     fn split_missing_segments_on_incomplete_writes() {
         let mut buffer = OutOfOrderBytes::with_capacity(40);
         buffer
-            .insert_at_offset(15, &vec![1, 2, 3, 4, 5])
+            .insert_at_offset(15, &[1, 2, 3, 4, 5])
             .expect("write fail");
         assert_eq!(
             vec![MissingSegment {
@@ -395,7 +391,7 @@ mod tests {
             buffer.missing_segments().collect::<Vec<_>>()
         );
         buffer
-            .insert_at_offset(5, &vec![5, 4, 3, 2, 1])
+            .insert_at_offset(5, &[5, 4, 3, 2, 1])
             .expect("write fail");
         assert_eq!(
             vec![
@@ -416,10 +412,10 @@ mod tests {
     fn fill_out_of_order_start_aligned_segment() {
         let mut buffer = OutOfOrderBytes::with_capacity(20);
         buffer
-            .insert_at_offset(5, &vec![5, 4, 3, 2, 1])
+            .insert_at_offset(5, &[5, 4, 3, 2, 1])
             .expect("write fail");
         buffer
-            .insert_at_offset(0, &vec![10, 9, 8, 7, 6])
+            .insert_at_offset(0, &[10, 9, 8, 7, 6])
             .expect("write fail");
         let bytes = buffer.into_bytes();
         assert_eq!(&[10, 9, 8, 7, 6, 5, 4, 3, 2, 1][..], bytes.as_ref())
@@ -428,9 +424,9 @@ mod tests {
     #[test]
     fn partial_fill_out_of_order_start_aligned_segment() {
         let mut buffer = OutOfOrderBytes::with_capacity(20);
-        buffer.insert_at_offset(4, &vec![2, 1]).expect("write fail");
-        buffer.insert_at_offset(0, &vec![6, 5]).expect("write fail");
-        buffer.insert_at_offset(2, &vec![4, 3]).expect("write fail");
+        buffer.insert_at_offset(4, &[2, 1]).expect("write fail");
+        buffer.insert_at_offset(0, &[6, 5]).expect("write fail");
+        buffer.insert_at_offset(2, &[4, 3]).expect("write fail");
         let bytes = buffer.into_bytes();
         assert_eq!(&[6, 5, 4, 3, 2, 1][..], bytes.as_ref())
     }
@@ -438,9 +434,9 @@ mod tests {
     #[test]
     fn fill_out_of_order_non_aligned_segment() {
         let mut buffer = OutOfOrderBytes::with_capacity(20);
-        buffer.insert_at_offset(4, &vec![2, 1]).expect("write fail");
-        buffer.insert_at_offset(2, &vec![4, 3]).expect("write fail");
-        buffer.insert_at_offset(0, &vec![6, 5]).expect("write fail");
+        buffer.insert_at_offset(4, &[2, 1]).expect("write fail");
+        buffer.insert_at_offset(2, &[4, 3]).expect("write fail");
+        buffer.insert_at_offset(0, &[6, 5]).expect("write fail");
         let bytes = buffer.into_bytes();
         assert_eq!(&[6, 5, 4, 3, 2, 1][..], bytes.as_ref())
     }
@@ -448,10 +444,10 @@ mod tests {
     #[test]
     fn partial_fill_out_of_order_non_aligned_segment() {
         let mut buffer = OutOfOrderBytes::with_capacity(20);
-        buffer.insert_at_offset(6, &vec![2, 1]).expect("write fail");
-        buffer.insert_at_offset(2, &vec![6, 5]).expect("write fail");
-        buffer.insert_at_offset(0, &vec![8, 7]).expect("write fail");
-        buffer.insert_at_offset(4, &vec![4, 3]).expect("write fail");
+        buffer.insert_at_offset(6, &[2, 1]).expect("write fail");
+        buffer.insert_at_offset(2, &[6, 5]).expect("write fail");
+        buffer.insert_at_offset(0, &[8, 7]).expect("write fail");
+        buffer.insert_at_offset(4, &[4, 3]).expect("write fail");
         let bytes = buffer.into_bytes();
         assert_eq!(&[8, 7, 6, 5, 4, 3, 2, 1][..], bytes.as_ref())
     }
@@ -459,31 +455,31 @@ mod tests {
     #[test]
     fn fails_to_overfill_a_missing_segment() {
         let mut buffer = OutOfOrderBytes::with_capacity(20);
-        buffer.insert_at_offset(4, &vec![2, 1]).expect("write fail");
+        buffer.insert_at_offset(4, &[2, 1]).expect("write fail");
         assert_eq!(
             Err(Error::NotEnoughSpace),
-            buffer.insert_at_offset(2, &vec![4, 3, 7, 8])
+            buffer.insert_at_offset(2, &[4, 3, 7, 8])
         );
     }
 
     #[test]
     fn fails_to_overwrite_a_received_segment() {
         let mut buffer = OutOfOrderBytes::with_capacity(20);
-        buffer.insert_at_offset(4, &vec![2, 1]).expect("write fail");
-        buffer.insert_at_offset(2, &vec![4, 3]).expect("write fail");
+        buffer.insert_at_offset(4, &[2, 1]).expect("write fail");
+        buffer.insert_at_offset(2, &[4, 3]).expect("write fail");
         assert_eq!(
             Err(Error::WouldOverwrite),
-            buffer.insert_at_offset(2, &vec![7, 8])
+            buffer.insert_at_offset(2, &[7, 8])
         );
     }
 
     #[test]
     fn fails_to_overwrite_a_received_segment_in_the_tail() {
         let mut buffer = OutOfOrderBytes::with_capacity(20);
-        buffer.insert_at_offset(4, &vec![2, 1]).expect("write fail");
+        buffer.insert_at_offset(4, &[2, 1]).expect("write fail");
         assert_eq!(
             Err(Error::WouldOverwrite),
-            buffer.insert_at_offset(4, &vec![7, 8])
+            buffer.insert_at_offset(4, &[7, 8])
         );
     }
 }
