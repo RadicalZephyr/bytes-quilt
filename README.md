@@ -55,10 +55,10 @@ fn main() {
     let mut quilt = BytesQuilt::new();
 
     // Write bytes to the quilt
-    quilt.put_u8_at(0x04, 16);
-    quilt.put_bytes_at(0x01, 2, 0);
-    quilt.put_at(&[0x02, 0x03], 8);
-    quilt.put_u32(0x05, 24);
+    quilt.put_u8_at(32, 0x04);
+    quilt.put_bytes_at(0, 0x01, 2);
+    quilt.put_at(16, &[0x02, 0x03]);
+    quilt.put_u32(40, 0x05);
 
     // Reassemble the buffer
     let buffer = quilt.reassemble();
