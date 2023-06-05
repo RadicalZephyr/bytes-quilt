@@ -79,11 +79,7 @@ impl BytesQuilt {
         Ok(())
     }
 
-    pub fn insert_at_offset(
-        &mut self,
-        offset: usize,
-        bytes: &[u8],
-    ) -> Result<Option<MissingSegment>, Error> {
+    pub fn put_at(&mut self, offset: usize, bytes: &[u8]) -> Result<Option<MissingSegment>, Error> {
         let mut missing_segment = None;
         debug_assert!(
             self.segments
@@ -288,9 +284,7 @@ mod tests {
     #[test]
     fn fill_in_order() {
         let mut buffer = BytesQuilt::with_capacity(20);
-        buffer
-            .insert_at_offset(0, &[5_u8, 4, 3, 2, 1])
-            .expect("write fail");
+        buffer.put_at(0, &[5_u8, 4, 3, 2, 1]).expect("write fail");
         let bytes = buffer.into_bytes();
         assert_eq!(&[5_u8, 4, 3, 2, 1][..], bytes.as_ref())
     }
@@ -299,7 +293,7 @@ mod tests {
     fn fill_in_order_produces_no_missing_segments() {
         let mut buffer = BytesQuilt::with_capacity(20);
         for offset in 0..20 {
-            buffer.insert_at_offset(offset, &[3]).expect("write fail");
+            buffer.put_at(offset, &[3]).expect("write fail");
         }
         assert!(buffer.missing_segments().next().is_none());
         let bytes = buffer.into_bytes();
@@ -309,9 +303,7 @@ mod tests {
     #[test]
     fn detect_missing_segments() {
         let mut buffer = BytesQuilt::with_capacity(20);
-        let missing_segment = buffer
-            .insert_at_offset(5, &[5, 4, 3, 2, 1])
-            .expect("write fail");
+        let missing_segment = buffer.put_at(5, &[5, 4, 3, 2, 1]).expect("write fail");
         assert_eq!(
             Some(MissingSegment {
                 offset: 0,
@@ -324,12 +316,8 @@ mod tests {
     #[test]
     fn detect_multiple_missing_segments() {
         let mut buffer = BytesQuilt::with_capacity(20);
-        buffer
-            .insert_at_offset(5, &[5, 4, 3, 2, 1])
-            .expect("write fail");
-        buffer
-            .insert_at_offset(15, &[1, 2, 3, 4, 5])
-            .expect("write fail");
+        buffer.put_at(5, &[5, 4, 3, 2, 1]).expect("write fail");
+        buffer.put_at(15, &[1, 2, 3, 4, 5]).expect("write fail");
         assert_eq!(
             vec![
                 MissingSegment {
@@ -348,15 +336,9 @@ mod tests {
     #[test]
     fn detect_missing_segments_of_different_sizes() {
         let mut buffer = BytesQuilt::with_capacity(40);
-        buffer
-            .insert_at_offset(5, &[5, 4, 3, 2, 1])
-            .expect("write fail");
-        buffer
-            .insert_at_offset(15, &[1, 2, 3, 4, 5])
-            .expect("write fail");
-        buffer
-            .insert_at_offset(35, &[1, 2, 3, 4, 5])
-            .expect("write fail");
+        buffer.put_at(5, &[5, 4, 3, 2, 1]).expect("write fail");
+        buffer.put_at(15, &[1, 2, 3, 4, 5]).expect("write fail");
+        buffer.put_at(35, &[1, 2, 3, 4, 5]).expect("write fail");
         assert_eq!(
             vec![
                 MissingSegment {
@@ -379,9 +361,7 @@ mod tests {
     #[test]
     fn split_missing_segments_on_incomplete_writes() {
         let mut buffer = BytesQuilt::with_capacity(40);
-        buffer
-            .insert_at_offset(15, &[1, 2, 3, 4, 5])
-            .expect("write fail");
+        buffer.put_at(15, &[1, 2, 3, 4, 5]).expect("write fail");
         assert_eq!(
             vec![MissingSegment {
                 offset: 0,
@@ -389,9 +369,7 @@ mod tests {
             }],
             buffer.missing_segments().collect::<Vec<_>>()
         );
-        buffer
-            .insert_at_offset(5, &[5, 4, 3, 2, 1])
-            .expect("write fail");
+        buffer.put_at(5, &[5, 4, 3, 2, 1]).expect("write fail");
         assert_eq!(
             vec![
                 MissingSegment {
@@ -410,12 +388,8 @@ mod tests {
     #[test]
     fn fill_out_of_order_start_aligned_segment() {
         let mut buffer = BytesQuilt::with_capacity(20);
-        buffer
-            .insert_at_offset(5, &[5, 4, 3, 2, 1])
-            .expect("write fail");
-        buffer
-            .insert_at_offset(0, &[10, 9, 8, 7, 6])
-            .expect("write fail");
+        buffer.put_at(5, &[5, 4, 3, 2, 1]).expect("write fail");
+        buffer.put_at(0, &[10, 9, 8, 7, 6]).expect("write fail");
         let bytes = buffer.into_bytes();
         assert_eq!(&[10, 9, 8, 7, 6, 5, 4, 3, 2, 1][..], bytes.as_ref())
     }
@@ -423,9 +397,9 @@ mod tests {
     #[test]
     fn partial_fill_out_of_order_start_aligned_segment() {
         let mut buffer = BytesQuilt::with_capacity(20);
-        buffer.insert_at_offset(4, &[2, 1]).expect("write fail");
-        buffer.insert_at_offset(0, &[6, 5]).expect("write fail");
-        buffer.insert_at_offset(2, &[4, 3]).expect("write fail");
+        buffer.put_at(4, &[2, 1]).expect("write fail");
+        buffer.put_at(0, &[6, 5]).expect("write fail");
+        buffer.put_at(2, &[4, 3]).expect("write fail");
         let bytes = buffer.into_bytes();
         assert_eq!(&[6, 5, 4, 3, 2, 1][..], bytes.as_ref())
     }
@@ -433,9 +407,9 @@ mod tests {
     #[test]
     fn fill_out_of_order_non_aligned_segment() {
         let mut buffer = BytesQuilt::with_capacity(20);
-        buffer.insert_at_offset(4, &[2, 1]).expect("write fail");
-        buffer.insert_at_offset(2, &[4, 3]).expect("write fail");
-        buffer.insert_at_offset(0, &[6, 5]).expect("write fail");
+        buffer.put_at(4, &[2, 1]).expect("write fail");
+        buffer.put_at(2, &[4, 3]).expect("write fail");
+        buffer.put_at(0, &[6, 5]).expect("write fail");
         let bytes = buffer.into_bytes();
         assert_eq!(&[6, 5, 4, 3, 2, 1][..], bytes.as_ref())
     }
@@ -443,10 +417,10 @@ mod tests {
     #[test]
     fn partial_fill_out_of_order_non_aligned_segment() {
         let mut buffer = BytesQuilt::with_capacity(20);
-        buffer.insert_at_offset(6, &[2, 1]).expect("write fail");
-        buffer.insert_at_offset(2, &[6, 5]).expect("write fail");
-        buffer.insert_at_offset(0, &[8, 7]).expect("write fail");
-        buffer.insert_at_offset(4, &[4, 3]).expect("write fail");
+        buffer.put_at(6, &[2, 1]).expect("write fail");
+        buffer.put_at(2, &[6, 5]).expect("write fail");
+        buffer.put_at(0, &[8, 7]).expect("write fail");
+        buffer.put_at(4, &[4, 3]).expect("write fail");
         let bytes = buffer.into_bytes();
         assert_eq!(&[8, 7, 6, 5, 4, 3, 2, 1][..], bytes.as_ref())
     }
@@ -454,31 +428,22 @@ mod tests {
     #[test]
     fn fails_to_overfill_a_missing_segment() {
         let mut buffer = BytesQuilt::with_capacity(20);
-        buffer.insert_at_offset(4, &[2, 1]).expect("write fail");
-        assert_eq!(
-            Err(Error::NotEnoughSpace),
-            buffer.insert_at_offset(2, &[4, 3, 7, 8])
-        );
+        buffer.put_at(4, &[2, 1]).expect("write fail");
+        assert_eq!(Err(Error::NotEnoughSpace), buffer.put_at(2, &[4, 3, 7, 8]));
     }
 
     #[test]
     fn fails_to_overwrite_a_received_segment() {
         let mut buffer = BytesQuilt::with_capacity(20);
-        buffer.insert_at_offset(4, &[2, 1]).expect("write fail");
-        buffer.insert_at_offset(2, &[4, 3]).expect("write fail");
-        assert_eq!(
-            Err(Error::WouldOverwrite),
-            buffer.insert_at_offset(2, &[7, 8])
-        );
+        buffer.put_at(4, &[2, 1]).expect("write fail");
+        buffer.put_at(2, &[4, 3]).expect("write fail");
+        assert_eq!(Err(Error::WouldOverwrite), buffer.put_at(2, &[7, 8]));
     }
 
     #[test]
     fn fails_to_overwrite_a_received_segment_in_the_tail() {
         let mut buffer = BytesQuilt::with_capacity(20);
-        buffer.insert_at_offset(4, &[2, 1]).expect("write fail");
-        assert_eq!(
-            Err(Error::WouldOverwrite),
-            buffer.insert_at_offset(4, &[7, 8])
-        );
+        buffer.put_at(4, &[2, 1]).expect("write fail");
+        assert_eq!(Err(Error::WouldOverwrite), buffer.put_at(4, &[7, 8]));
     }
 }
