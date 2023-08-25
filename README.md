@@ -45,7 +45,9 @@ to use, following the semantic versioning guidelines.
 
 ## Usage
 
-Here's a simple example that demonstrates how to use BytesQuilt:
+Here's a simple example that demonstrates how to use `BytesQuilt`
+(note, some illustrated APIs may be aspirational and may not be
+implemented yet):
 
 ```rust
 use bytesquilt::BytesQuilt;
@@ -61,7 +63,7 @@ fn main() {
     quilt.put_u32(40, 0x05);
 
     // Reassemble the buffer
-    let buffer = quilt.reassemble();
+    let buffer = quilt.into_inner();
 
     // Use the buffer as needed
     println!("Buffer: {:?}", buffer);
