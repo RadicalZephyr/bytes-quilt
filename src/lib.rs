@@ -1,18 +1,26 @@
+#![warn(missing_docs, missing_debug_implementations, rust_2018_idioms)]
+
+//! Provides a data structure for tracking random-access writes to a buffer.
+
 use std::mem;
 
-use bytes::{BufMut, Bytes, BytesMut};
+use bytes::{BufMut, BytesMut};
 
 use thiserror::Error;
 
+/// The error type for writing to the `BytesQuilt`.
 #[derive(Copy, Clone, Debug, Error, PartialEq, Eq)]
 pub enum Error {
+    /// Attempted to write past the end of the current buffer.
     #[error("Not enough space in buffer segment")]
     NotEnoughSpace,
 
+    /// Attempted to write more data than would fit into the missing segment.
     #[error("Would overwrite previously received data")]
     WouldOverwrite,
 }
 
+/// A byte buffer that tracks the locations of random-access writes.
 #[derive(Debug)]
 pub struct BytesQuilt {
     tail_offset: usize,
@@ -33,13 +41,30 @@ struct Segment {
     buffer: BytesMut,
 }
 
+/// A description of a segment in the buffer that hasn't been written to.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct MissingSegment {
     offset: usize,
     length: usize,
 }
 
+impl Default for BytesQuilt {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BytesQuilt {
+    /// Creates a new `BytesQuilt` with default capacity.
+    pub fn new() -> Self {
+        Self {
+            tail_offset: 0,
+            segments: Vec::new(),
+            buffer_tail: BytesMut::new(),
+        }
+    }
+
+    /// Creates a new `BytesQuilt` with the specified capacity.
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             tail_offset: 0,
@@ -60,6 +85,8 @@ impl BytesQuilt {
             return Err(Error::WouldOverwrite);
         }
         match segment.buffer.capacity().cmp(&bytes.len()) {
+            // TODO[ZS 2023-08-25]: This probably shouldn't even be an error,
+            // we should just grow the buffer.
             Ordering::Less => return Err(Error::NotEnoughSpace),
             Ordering::Equal => {
                 segment.status = Status::Received;
@@ -79,7 +106,10 @@ impl BytesQuilt {
         Ok(())
     }
 
-    pub fn put_at(&mut self, offset: usize, bytes: &[u8]) -> Result<Option<MissingSegment>, Error> {
+    /// Transfer bytes into `self` from `src` at `offset`.
+    ///
+    /// The `offset` is given from the beginning of the buffer.
+    pub fn put_at(&mut self, offset: usize, src: &[u8]) -> Result<Option<MissingSegment>, Error> {
         let mut missing_segment = None;
         debug_assert!(
             self.segments
@@ -96,7 +126,7 @@ impl BytesQuilt {
                 .binary_search_by_key(&offset, |segment| segment.offset)
             {
                 Ok(index) => {
-                    self.write_offset_at_index(index, offset, bytes)?;
+                    self.write_offset_at_index(index, offset, src)?;
                 }
                 Err(index) => {
                     // This indexing might be safe because the first
@@ -106,7 +136,7 @@ impl BytesQuilt {
                     let to_write_buffer = segment.buffer.split_off(offset - segment.offset);
                     let segment = Segment::missing(offset, to_write_buffer);
                     self.segments.insert(index, segment);
-                    self.write_offset_at_index(index, offset, bytes)?;
+                    self.write_offset_at_index(index, offset, src)?;
                 }
             };
             return Ok(None);
@@ -135,17 +165,21 @@ impl BytesQuilt {
             // Supposed to write at beginning of tail, but tail is not empty!
             return Err(Error::WouldOverwrite);
         }
-        self.buffer_tail.put(bytes);
+        self.buffer_tail.put(src);
         Ok(missing_segment)
     }
 
+    /// An iterator over each `MissingSegment` in the `BytesQuilt`.
     pub fn missing_segments(&self) -> impl '_ + Iterator<Item = MissingSegment> {
         self.segments.iter().filter_map(Segment::missing_segment)
     }
 
-    pub fn into_bytes(self) -> Bytes {
+    /// Reassemble the inner `BytesMut` and return it.
+    pub fn into_inner(self) -> BytesMut {
         let mut segments = self.segments.into_iter();
         if let Some(segment) = segments.next() {
+            // TODO[ZS 2023-08-25]: initialize these unwritten
+            // sections with zeroes.
             debug_assert!(
                 !segment.is_missing(),
                 "a segment at offset {} of size {} is missing",
@@ -163,9 +197,9 @@ impl BytesQuilt {
                 buffer.unsplit(segment.buffer);
             }
             buffer.unsplit(self.buffer_tail);
-            return buffer.freeze();
+            return buffer;
         }
-        self.buffer_tail.freeze()
+        self.buffer_tail
     }
 }
 
@@ -202,6 +236,9 @@ impl Segment {
 }
 
 impl MissingSegment {
+    /// Returns an iterator of all the absolute offsets for byte
+    /// segments of a specific size that can fit within this
+    /// `MissingSegment`.
     pub fn offsets_for(self, frame_size: usize) -> impl Iterator<Item = usize> {
         let offset = self.offset;
         let number_of_frames = self.length / frame_size;
@@ -285,7 +322,7 @@ mod tests {
     fn fill_in_order() {
         let mut buffer = BytesQuilt::with_capacity(20);
         buffer.put_at(0, &[5_u8, 4, 3, 2, 1]).expect("write fail");
-        let bytes = buffer.into_bytes();
+        let bytes = buffer.into_inner();
         assert_eq!(&[5_u8, 4, 3, 2, 1][..], bytes.as_ref())
     }
 
@@ -296,7 +333,7 @@ mod tests {
             buffer.put_at(offset, &[3]).expect("write fail");
         }
         assert!(buffer.missing_segments().next().is_none());
-        let bytes = buffer.into_bytes();
+        let bytes = buffer.into_inner();
         assert_eq!(vec![3; 20], bytes.as_ref())
     }
 
@@ -390,7 +427,7 @@ mod tests {
         let mut buffer = BytesQuilt::with_capacity(20);
         buffer.put_at(5, &[5, 4, 3, 2, 1]).expect("write fail");
         buffer.put_at(0, &[10, 9, 8, 7, 6]).expect("write fail");
-        let bytes = buffer.into_bytes();
+        let bytes = buffer.into_inner();
         assert_eq!(&[10, 9, 8, 7, 6, 5, 4, 3, 2, 1][..], bytes.as_ref())
     }
 
@@ -400,7 +437,7 @@ mod tests {
         buffer.put_at(4, &[2, 1]).expect("write fail");
         buffer.put_at(0, &[6, 5]).expect("write fail");
         buffer.put_at(2, &[4, 3]).expect("write fail");
-        let bytes = buffer.into_bytes();
+        let bytes = buffer.into_inner();
         assert_eq!(&[6, 5, 4, 3, 2, 1][..], bytes.as_ref())
     }
 
@@ -410,7 +447,7 @@ mod tests {
         buffer.put_at(4, &[2, 1]).expect("write fail");
         buffer.put_at(2, &[4, 3]).expect("write fail");
         buffer.put_at(0, &[6, 5]).expect("write fail");
-        let bytes = buffer.into_bytes();
+        let bytes = buffer.into_inner();
         assert_eq!(&[6, 5, 4, 3, 2, 1][..], bytes.as_ref())
     }
 
@@ -421,7 +458,7 @@ mod tests {
         buffer.put_at(2, &[6, 5]).expect("write fail");
         buffer.put_at(0, &[8, 7]).expect("write fail");
         buffer.put_at(4, &[4, 3]).expect("write fail");
-        let bytes = buffer.into_bytes();
+        let bytes = buffer.into_inner();
         assert_eq!(&[8, 7, 6, 5, 4, 3, 2, 1][..], bytes.as_ref())
     }
 
