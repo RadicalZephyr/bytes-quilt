@@ -37,7 +37,7 @@ to your `Cargo.toml` file:
 
 ```toml
 [dependencies]
-bytesquilt = "<version>"
+bytes-quilt = "<version>"
 ```
 
 Make sure to replace `<version>` with the appropriate version you want
