@@ -3,6 +3,13 @@ name = "bytes-quilt"
 version = "0.1.0"
 edition = "2021"
 authors = ["Zefira Shannon <zefira@hey.com>"]
+license = "Apache-2.0"
+keywords = ["buffers", "zero-copy", "io", "networking"]
+categories = ["data-structures"]
+description = "Provides a data structure for tracking random-access writes to a buffer."
+readme = "README.md"
+homepage = "https://github.com/RadicalZephyr/bytes-quilt"
+repository = "https://github.com/RadicalZephyr/bytes-quilt"
 
 [dependencies]
 bytes = "1.3.0"
