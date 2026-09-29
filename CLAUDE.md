@@ -4,9 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Why this exists
 
-A Klipper host starts every connection by downloading the firmware's data dictionary: a compressed JSON document that maps the protocol's messages to the numeric ids that particular firmware build uses. It's several KB and packets top out around 60 bytes, so the host requests it in pages (`identify offset=… count=…`). The firmware doesn't promise to answer those in order, or at all. My first version assumed both, and its startup routine started over whenever a single page went missing. The quilt lets the host fire off page requests, drop each reply where it belongs as it arrives, and re-request only what's still missing.
+The quilt came out of a host that downloads a several-KB blob from a device in small pages (packets top out around 60 bytes), where the device doesn't promise to answer page requests in order, or at all. My first version assumed both, and its startup routine started over whenever a single page went missing. The quilt lets the host fire off page requests, drop each reply where it belongs as it arrives, and re-request only what's still missing.
 
-The crate stays protocol-agnostic, but that caller is what the API is shaped around:
+The crate stands on its own, so describe that use case in those general terms. The history merged in at `ffc1c89` was pulled out of that other project with filter-repo, which is why old commits use older names (`OutOfOrderBytes`, `insert_at_offset`) and mention code that isn't here.
+
+The API is shaped around that caller:
 
 - `put_at(offset, bytes)` returns `Some(MissingSegment)` from the write that opens a gap, so the caller can re-request right away.
 - `missing_segments()` lists the gaps, and `MissingSegment::offsets_for(frame_size)` turns one into the offsets to re-request (whole frames only).
